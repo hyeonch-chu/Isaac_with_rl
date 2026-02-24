@@ -1,0 +1,58 @@
+name: isaac-sim
+
+# ============================================================
+# Isaac Sim 로컬 직접 연결 스트리밍 모드 (native streaming)
+# Omniverse Streaming Client에서 접속: 100.85.14.35:48010
+# ============================================================
+
+services:
+  isaac-sim:
+    image: nvcr.io/nvidia/isaac-sim:${ISAAC_SIM_VERSION:-4.5.0}
+    container_name: isaac-sim
+
+    restart: unless-stopped
+
+    # GPU 접근 설정
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    # host 네트워크: 컨테이너가 호스트 네트워크(Tailscale IP 포함)를 직접 사용
+    # → WebRTC ICE 후보에 실제 서버 IP가 포함되어 검은 화면 문제 해결
+    # → ports 매핑 불필요 (컨테이너 포트 = 호스트 포트)
+    network_mode: host
+
+    environment:
+      - ACCEPT_EULA=Y
+      - PRIVACY_CONSENT=Y
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+      - NVIDIA_DRIVER_CAPABILITIES=all
+
+    # 볼륨 마운트 (캐시 및 데이터 영속성)
+    volumes:
+      # Kit 셰이더/에셋 캐시 (첫 실행 후 재컴파일 방지)
+      - ${DATA_DIR:-./volumes}/cache/kit:/isaac-sim/kit/cache:rw
+      # Omniverse 캐시
+      - ${DATA_DIR:-./volumes}/cache/ov:/root/.cache/ov:rw
+      # pip 캐시
+      - ${DATA_DIR:-./volumes}/cache/pip:/root/.cache/pip:rw
+      # OpenGL 셰이더 캐시
+      - ${DATA_DIR:-./volumes}/cache/glcache:/root/.cache/nvidia/GLCache:rw
+      # CUDA compute 캐시
+      - ${DATA_DIR:-./volumes}/cache/computecache:/root/.nv/ComputeCache:rw
+      # 로그
+      - ${DATA_DIR:-./volumes}/logs:/root/.nvidia-omniverse/logs:rw
+      # 작업 파일 (Python 스크립트, USD 파일 등)
+      - ${DATA_DIR:-./volumes}/workspace:/root/workspace:rw
+
+    stdin_open: true
+    tty: true
+
+    # 로컬 직접 연결 스트리밍 (native, NVCF 불필요, 포트 48010)
+    # ENTRYPOINT를 직접 오버라이드해야 runoldstreaming.sh 실행 가능
+    entrypoint: ["/bin/sh", "/isaac-sim/runoldstreaming.sh"]
+    command: []
